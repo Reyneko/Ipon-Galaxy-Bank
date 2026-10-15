@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ipon-galaxy-bank
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false   # you'll be asked to type this in the Render dashboard
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ipon-galaxy-db
+          property: connectionString
+
+databases:
+  - name: ipon-galaxy-db
+    plan: free

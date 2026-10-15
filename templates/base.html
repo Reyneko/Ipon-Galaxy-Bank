@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}{{ bank_name }}{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } }
+  </script>
+  <style>
+    body { background: radial-gradient(1200px 600px at 10% -10%, #e0e7ff 0%, transparent 60%),
+                       radial-gradient(900px 500px at 100% 0%, #fae8ff 0%, transparent 55%), #f8fafc; }
+    .pin-input { -webkit-text-security: disc; letter-spacing: .5em; }
+  </style>
+</head>
+<body class="font-sans text-slate-800 min-h-screen">
+  {% block nav %}{% endblock %}
+
+  <div id="flash" class="max-w-5xl mx-auto px-4 pt-4 space-y-2">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in msgs %}
+        <div class="rounded-xl px-4 py-3 text-sm font-medium flex items-center gap-2
+          {% if cat == 'error' %}bg-red-50 text-red-700 border border-red-200
+          {% else %}bg-indigo-50 text-indigo-700 border border-indigo-200{% endif %}">
+          <i data-lucide="{{ 'alert-circle' if cat == 'error' else 'info' }}" class="w-4 h-4 shrink-0"></i>{{ msg }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  {% block content %}{% endblock %}
+
+  <footer class="text-center text-xs text-slate-400 py-8 px-4">
+    {{ bank_name }} · a school project simulation — no real money involved 🪙
+  </footer>
+
+  <script>
+    const csrf = { token: document.querySelector('meta[name=csrf-token]').content };
+    lucide.createIcons();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

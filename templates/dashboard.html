@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block nav %}
+<header class="bg-white/80 backdrop-blur border-b border-slate-100 sticky top-0 z-30">
+  <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-2 font-extrabold tracking-tight"><span class="text-xl">🪐</span> {{ bank_name }}</div>
+    <div class="flex items-center gap-3 text-sm">
+      <span class="hidden sm:inline text-slate-500" id="idle-label">Auto-logout in <b id="idle">5:00</b></span>
+      <form method="post" action="{{ url_for('logout') }}" id="logout-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium flex items-center gap-1.5">
+          <i data-lucide="log-out" class="w-4 h-4"></i> Logout
+        </button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+  <section class="flex flex-col sm:flex-row sm:items-end justify-between gap-1">
+    <div>
+      <p class="text-sm text-slate-500">Welcome back,</p>
+      <h1 class="text-2xl font-extrabold tracking-tight">{{ user.full_name }}</h1>
+    </div>
+    <p class="text-xs text-slate-400">Account no. <span class="font-mono text-slate-600">{{ user.account_number }}</span></p>
+  </section>
+
+  <!-- balance card + actions -->
+  <section class="grid md:grid-cols-5 gap-4">
+    <div class="md:col-span-3 rounded-3xl p-6 text-white bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 shadow-xl shadow-indigo-200 relative overflow-hidden">
+      <div class="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/10"></div>
+      <div class="absolute -right-2 bottom-[-4rem] w-40 h-40 rounded-full bg-white/10"></div>
+      <div class="flex items-center justify-between relative">
+        <span class="text-sm/none text-white/80">Available balance</span>
+        <button id="eye" type="button" class="p-1.5 rounded-lg bg-white/15 hover:bg-white/25" aria-label="Toggle balance">
+          <i data-lucide="eye" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <p class="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight relative">
+        ₱<span id="balance" data-value="{{ '{:,.2f}'.format(user.balance) }}">{{ '{:,.2f}'.format(user.balance) }}</span>
+      </p>
+      <p class="mt-6 text-sm text-white/70 font-mono relative">•••• {{ user.account_number[-4:] }}</p>
+    </div>
+
+    <div class="md:col-span-2 grid grid-cols-2 md:grid-cols-1 gap-3">
+      <button data-open="txn" data-kind="deposit" class="rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md p-4 text-left transition flex md:flex-row flex-col md:items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center"><i data-lucide="arrow-down-left" class="w-5 h-5"></i></span>
+        <span><b class="block">Deposit</b><span class="text-xs text-slate-500">Add pesos to your account</span></span>
+      </button>
+      <button data-open="txn" data-kind="withdrawal" class="rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md p-4 text-left transition flex md:flex-row flex-col md:items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center"><i data-lucide="arrow-up-right" class="w-5 h-5"></i></span>
+        <span><b class="block">Withdraw</b><span class="text-xs text-slate-500">Take pesos out</span></span>
+      </button>
+      <button data-open="pin" class="col-span-2 md:col-span-1 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md p-4 text-left transition flex items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center"><i data-lucide="key-round" class="w-5 h-5"></i></span>
+        <span><b class="block">Change PIN</b><span class="text-xs text-slate-500">Keep your account safe</span></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- receipt (shown after each transaction) -->
+  <section id="receipt" class="hidden rounded-3xl bg-white border-2 border-emerald-200 shadow-sm p-5">
+    <div class="flex items-start gap-3">
+      <span class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><i data-lucide="shield-check" class="w-5 h-5"></i></span>
+      <div class="flex-1 min-w-0">
+        <p class="font-bold">Transaction successful</p>
+        <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <dt class="text-slate-500">Reference</dt><dd id="r-ref" class="font-mono font-semibold break-all"></dd>
+          <dt class="text-slate-500">Type</dt><dd id="r-kind" class="capitalize"></dd>
+          <dt class="text-slate-500">Amount</dt><dd id="r-amount"></dd>
+          <dt class="text-slate-500">New balance</dt><dd id="r-balance"></dd>
+          <dt class="text-slate-500">Time</dt><dd id="r-time"></dd>
+          <dt class="text-slate-500">From IP</dt><dd id="r-ip" class="font-mono"></dd>
+        </dl>
+        <p class="mt-3 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+          🔒 For your safety your PIN was cleared and the form re-locked. You'll need to enter your PIN again for the next transaction.
+          If you don't recognise this activity, lock your account right away.
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button id="r-done" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold">Got it</button>
+          <button id="r-panic" class="px-4 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-semibold flex items-center gap-1.5">
+            <i data-lucide="octagon-alert" class="w-4 h-4"></i> Not me — lock my account
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid lg:grid-cols-3 gap-6">
+    <!-- history -->
+    <section class="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+      <h2 class="font-bold mb-3">Recent transactions</h2>
+      <ul id="history" class="divide-y divide-slate-100">
+        {% for t in txns %}
+        <li class="py-3 flex items-center gap-3">
+          <span class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 {{ 'bg-rose-100 text-rose-600' if t.kind == 'withdrawal' else 'bg-emerald-100 text-emerald-600' }}">
+            <i data-lucide="{{ 'arrow-up-right' if t.kind == 'withdrawal' else 'arrow-down-left' }}" class="w-4 h-4"></i>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="font-semibold capitalize text-sm">{{ 'Opening deposit' if t.kind == 'opening' else t.kind }}</p>
+            <p class="text-xs text-slate-400 truncate">{{ t.created_at.strftime('%b %d, %Y %I:%M %p') }} UTC · {{ t.reference }}</p>
+          </div>
+          <div class="text-right">
+            <p class="font-bold text-sm {{ 'text-rose-600' if t.kind == 'withdrawal' else 'text-emerald-600' }}">{{ '−' if t.kind == 'withdrawal' else '+' }}₱{{ '{:,.2f}'.format(t.amount) }}</p>
+            <p class="text-xs text-slate-400">Bal ₱{{ '{:,.2f}'.format(t.balance_after) }}</p>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      <p id="empty" class="text-sm text-slate-400 py-6 text-center {{ 'hidden' if txns }}">No transactions yet. Make a deposit to get started!</p>
+    </section>
+
+    <!-- security activity -->
+    <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+      <h2 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i> Security activity</h2>
+      <ul class="space-y-3 text-sm">
+        {% for e in events %}
+        <li>
+          <p class="font-medium">{{ e.event.replace('_', ' ').title() }}</p>
+          <p class="text-xs text-slate-400">{{ e.created_at.strftime('%b %d %I:%M %p') }} UTC · {{ e.ip_address }}</p>
+        </li>
+        {% else %}<li class="text-slate-400">Nothing yet.</li>{% endfor %}
+      </ul>
+      <p class="mt-4 text-xs text-slate-400">Max 3 wrong PINs, then your account locks. Daily withdrawal limit: ₱50,000.</p>
+    </section>
+  </div>
+</main>
+
+<!-- transaction modal -->
+<div id="modal-txn" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <form id="form-txn" class="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 space-y-4" autocomplete="off">
+    <div class="flex items-center justify-between">
+      <h3 id="txn-title" class="text-lg font-bold"></h3>
+      <button type="button" data-close class="p-1 rounded-lg hover:bg-slate-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" for="amount">Amount (₱)</label>
+      <input id="amount" type="number" step="0.01" min="0.01" max="100000" required inputmode="decimal"
+             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="0.00">
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" for="txn-pin">Confirm with your PIN</label>
+      <input id="txn-pin" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" required autocomplete="off"
+             class="pin-input w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    </div>
+    <p id="txn-err" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></p>
+    <button id="txn-submit" class="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">Confirm</button>
+  </form>
+</div>
+
+<!-- change pin modal -->
+<div id="modal-pin" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+  <form id="form-pin" class="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 space-y-4" autocomplete="off">
+    <div class="flex items-center justify-between">
+      <h3 class="text-lg font-bold">Change your PIN</h3>
+      <button type="button" id="pin-close" data-close class="p-1 rounded-lg hover:bg-slate-100"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <p id="pin-force" class="hidden text-sm bg-amber-50 text-amber-800 rounded-lg px-3 py-2">
+      Your account was opened with a default PIN. Please set your own before making transactions.
+    </p>
+    {% for id, label in [('old-pin','Current PIN'),('new-pin','New PIN (4 digits)'),('confirm-pin','Confirm new PIN')] %}
+    <div>
+      <label class="block text-sm font-medium mb-1" for="{{ id }}">{{ label }}</label>
+      <input id="{{ id }}" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" required autocomplete="off"
+             class="pin-input w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    </div>
+    {% endfor %}
+    <p id="pin-err" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></p>
+    <button class="w-full py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition">Save new PIN</button>
+  </form>
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const MUST_CHANGE = {{ 'true' if user.must_change_pin else 'false' }};
+  const $ = (id) => document.getElementById(id);
+  const fmtCash = (s) => s;
+
+  // ---------- helpers
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.token },
+      body: JSON.stringify(body || {})
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) { data = { ok: false, error: 'Something went wrong.' }; }
+    if (res.status === 401) { location.href = '/login'; }
+    return data;
+  }
+  function show(el) { el.classList.remove('hidden'); el.classList.add('flex'); }
+  function hide(el) { el.classList.add('hidden'); el.classList.remove('flex'); }
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 3500);
+  }
+  function err(id, msg) { const e = $(id); e.textContent = msg; e.classList.toggle('hidden', !msg); }
+
+  // ---------- balance eye
+  let hidden = false;
+  $('eye').onclick = () => {
+    hidden = !hidden;
+    const b = $('balance');
+    b.textContent = hidden ? '••••••' : b.dataset.value;
+    $('eye').innerHTML = `<i data-lucide="${hidden ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>`;
+    lucide.createIcons();
+  };
+
+  // ---------- modals
+  let kind = 'deposit';
+  document.querySelectorAll('[data-open=txn]').forEach(btn => btn.onclick = () => {
+    if (MUST_CHANGE) { openPin(true); return; }
+    kind = btn.dataset.kind;
+    $('txn-title').textContent = kind === 'deposit' ? 'Deposit funds' : 'Withdraw funds';
+    $('txn-submit').className = 'w-full py-3 rounded-xl text-white font-semibold transition ' +
+      (kind === 'deposit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700');
+    err('txn-err', ''); $('form-txn').reset(); show($('modal-txn')); $('amount').focus();
+  });
+  function openPin(force) {
+    $('pin-force').classList.toggle('hidden', !force);
+    $('pin-close').classList.toggle('hidden', !!force);
+    err('pin-err', ''); $('form-pin').reset(); show($('modal-pin')); $('old-pin').focus();
+  }
+  document.querySelectorAll('[data-open=pin]').forEach(b => b.onclick = () => openPin(false));
+  document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => {
+    hide($('modal-txn')); hide($('modal-pin')); $('form-txn').reset(); $('form-pin').reset();
+  });
+  if (MUST_CHANGE) openPin(true);
+
+  // ---------- transaction
+  $('form-txn').onsubmit = async (e) => {
+    e.preventDefault();
+    $('txn-submit').disabled = true;
+    const data = await post('/api/transaction', { kind, amount: $('amount').value, pin: $('txn-pin').value });
+    $('txn-submit').disabled = false;
+    $('txn-pin').value = '';  // PIN never lingers in the form
+    if (!data.ok) {
+      err('txn-err', data.error || 'Transaction failed.');
+      if (data.locked) setTimeout(() => location.href = '/login', 2500);
+      return;
+    }
+    csrf.token = data.csrf;
+    $('form-txn').reset(); hide($('modal-txn'));
+    $('balance').dataset.value = data.balance;
+    $('balance').textContent = hidden ? '••••••' : data.balance;
+    addHistory(data.txn);
+    $('r-ref').textContent = data.txn.reference;
+    $('r-kind').textContent = data.txn.kind;
+    $('r-amount').textContent = '₱' + data.txn.amount;
+    $('r-balance').textContent = '₱' + data.txn.balance_after;
+    $('r-time').textContent = data.txn.time;
+    $('r-ip').textContent = data.ip;
+    $('receipt').classList.remove('hidden');
+    $('receipt').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    resetIdle();
+  };
+  function addHistory(t) {
+    const w = t.kind === 'withdrawal';
+    const li = document.createElement('li');
+    li.className = 'py-3 flex items-center gap-3';
+    li.innerHTML = `
+      <span class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${w ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}">
+        <i data-lucide="${w ? 'arrow-up-right' : 'arrow-down-left'}" class="w-4 h-4"></i></span>
+      <div class="min-w-0 flex-1"><p class="font-semibold capitalize text-sm">${t.kind}</p>
+        <p class="text-xs text-slate-400 truncate">${t.time} · ${t.reference}</p></div>
+      <div class="text-right"><p class="font-bold text-sm ${w ? 'text-rose-600' : 'text-emerald-600'}">${w ? '−' : '+'}₱${t.amount}</p>
+        <p class="text-xs text-slate-400">Bal ₱${t.balance_after}</p></div>`;
+    $('history').prepend(li); $('empty').classList.add('hidden'); lucide.createIcons();
+  }
+  $('r-done').onclick = () => $('receipt').classList.add('hidden');
+  $('r-panic').onclick = async () => {
+    if (!confirm('Lock your account now? Only the admin can unlock it.')) return;
+    const data = await post('/api/panic-lock');
+    toast(data.message || 'Account locked.');
+    setTimeout(() => location.href = '/login', 1800);
+  };
+
+  // ---------- change pin
+  $('form-pin').onsubmit = async (e) => {
+    e.preventDefault();
+    const data = await post('/api/change-pin', {
+      old_pin: $('old-pin').value, new_pin: $('new-pin').value, confirm_pin: $('confirm-pin').value });
+    $('form-pin').reset();
+    if (!data.ok) {
+      err('pin-err', data.error || 'Could not change PIN.');
+      if (data.locked) setTimeout(() => location.href = '/login', 2500);
+      return;
+    }
+    toast(data.message);
+    setTimeout(() => location.reload(), 900);
+  };
+
+  // ---------- idle auto-logout (matches 5 min server session)
+  let left = 300;
+  function resetIdle() { left = 300; }
+  ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, resetIdle));
+  setInterval(() => {
+    left -= 1;
+    const m = Math.floor(left / 60), s = String(left % 60).padStart(2, '0');
+    $('idle').textContent = `${m}:${s}`;
+    if (left <= 0) $('logout-form').submit();
+  }, 1000);
+</script>
+{% endblock %}

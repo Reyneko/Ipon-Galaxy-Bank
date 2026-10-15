@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="min-h-[80vh] flex items-center justify-center px-4 py-8">
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-3xl shadow-lg shadow-indigo-200">🪐</div>
+      <h1 class="mt-4 text-3xl font-extrabold tracking-tight">{{ bank_name }}</h1>
+      <p class="text-slate-500 mt-1 italic">“{{ bank_tagline }}”</p>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/70 border border-slate-100 p-6 sm:p-8">
+      <div class="grid grid-cols-2 bg-slate-100 rounded-xl p-1 mb-6 text-sm font-semibold" role="tablist">
+        <button type="button" id="tab-customer" class="py-2 rounded-lg transition">Customer</button>
+        <button type="button" id="tab-admin" class="py-2 rounded-lg transition">Admin</button>
+      </div>
+
+      <form method="post" action="{{ url_for('login') }}" class="space-y-4" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="mode" id="mode" value="customer">
+
+        <div>
+          <label id="id-label" for="identifier" class="block text-sm font-medium mb-1">Account number</label>
+          <input id="identifier" name="identifier" required maxlength="40"
+                 class="w-full rounded-xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                 inputmode="numeric" placeholder="10-digit account number">
+        </div>
+        <div>
+          <label id="secret-label" for="secret" class="block text-sm font-medium mb-1">4-digit PIN</label>
+          <input id="secret" name="secret" required type="password" maxlength="4" inputmode="numeric"
+                 pattern="[0-9]{4}" autocomplete="off"
+                 class="w-full rounded-xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                 placeholder="••••">
+        </div>
+        <button class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-semibold shadow-lg shadow-indigo-200 hover:opacity-95 active:scale-[.99] transition flex items-center justify-center gap-2">
+          <i data-lucide="log-in" class="w-4 h-4"></i> Log in
+        </button>
+      </form>
+
+      <p id="hint" class="text-xs text-slate-400 text-center mt-5">
+        New here? Ask the bank admin to open an account for you.
+      </p>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const initial = new URLSearchParams(location.search).get('mode') === 'admin' ? 'admin' : 'customer';
+  const tabs = { customer: document.getElementById('tab-customer'), admin: document.getElementById('tab-admin') };
+  function setMode(mode) {
+    document.getElementById('mode').value = mode;
+    const admin = mode === 'admin';
+    const id = document.getElementById('identifier'), secret = document.getElementById('secret');
+    document.getElementById('id-label').textContent = admin ? 'Admin username' : 'Account number';
+    document.getElementById('secret-label').textContent = admin ? 'Password' : '4-digit PIN';
+    id.placeholder = admin ? 'admin username' : '10-digit account number';
+    id.inputMode = admin ? 'text' : 'numeric';
+    secret.removeAttribute('pattern'); secret.maxLength = admin ? 64 : 4;
+    secret.inputMode = admin ? 'text' : 'numeric';
+    if (!admin) secret.setAttribute('pattern', '[0-9]{4}');
+    secret.placeholder = admin ? 'password' : '••••';
+    document.getElementById('hint').style.visibility = admin ? 'hidden' : 'visible';
+    for (const [k, el] of Object.entries(tabs)) {
+      el.className = 'py-2 rounded-lg transition ' + (k === mode ? 'bg-white shadow text-indigo-700' : 'text-slate-500');
+    }
+  }
+  tabs.customer.onclick = () => setMode('customer');
+  tabs.admin.onclick = () => setMode('admin');
+  setMode(initial);
+</script>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block nav %}
+<header class="bg-slate-900 text-white sticky top-0 z-30">
+  <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-2 font-extrabold tracking-tight"><span class="text-xl">🪐</span> {{ bank_name }}
+      <span class="ml-1 text-[10px] uppercase tracking-widest bg-fuchsia-500 rounded px-1.5 py-0.5">Admin</span></div>
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-medium flex items-center gap-1.5">
+        <i data-lucide="log-out" class="w-4 h-4"></i> Logout
+      </button>
+    </form>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+  {% if new_cred %}
+  <section class="rounded-3xl border-2 border-amber-300 bg-amber-50 p-5">
+    <p class="font-bold flex items-center gap-2"><i data-lucide="key-round" class="w-4 h-4"></i> Credentials for {{ new_cred.name }}</p>
+    <div class="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
+      <div class="bg-white rounded-xl p-3"><p class="text-slate-500 text-xs">Account number</p><p class="font-mono text-lg font-bold">{{ new_cred.account }}</p></div>
+      <div class="bg-white rounded-xl p-3"><p class="text-slate-500 text-xs">Default PIN</p><p class="font-mono text-lg font-bold tracking-widest">{{ new_cred.pin }}</p></div>
+    </div>
+    <p class="mt-3 text-xs text-amber-800">⚠️ This PIN is shown only once. Hand it to the customer — they'll be forced to change it on first login.</p>
+  </section>
+  {% endif %}
+
+  <section class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4"><p class="text-xs text-slate-500">Customers</p><p class="text-2xl font-extrabold">{{ customers|length }}</p></div>
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4"><p class="text-xs text-slate-500">Locked accounts</p><p class="text-2xl font-extrabold">{{ customers|selectattr('locked')|list|length }}</p></div>
+    <div class="col-span-2 sm:col-span-1 bg-white rounded-2xl border border-slate-100 shadow-sm p-4"><p class="text-xs text-slate-500">Total deposits held</p><p class="text-2xl font-extrabold">{{ peso(total) }}</p></div>
+  </section>
+
+  <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+    <h2 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="user-plus" class="w-4 h-4 text-indigo-500"></i> Open a new customer account</h2>
+    <form method="post" action="{{ url_for('admin_create_customer') }}" class="grid sm:grid-cols-5 gap-3" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="full_name" required maxlength="80" placeholder="Full name" class="sm:col-span-2 rounded-xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <input name="opening_balance" type="number" step="0.01" min="0" max="100000" placeholder="Opening balance (optional)" class="sm:col-span-2 rounded-xl border border-slate-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      <button class="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3">Create</button>
+    </form>
+    <p class="text-xs text-slate-400 mt-2">A 10-digit account number and a random 4-digit default PIN are generated automatically.</p>
+  </section>
+
+  <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+    <h2 class="font-bold mb-3">Customers</h2>
+    {% if customers %}
+    <div class="overflow-x-auto -mx-5 px-5">
+      <table class="w-full text-sm min-w-[560px]">
+        <thead class="text-left text-xs text-slate-500">
+          <tr><th class="py-2">Name</th><th>Account</th><th class="text-right">Balance</th><th>Status</th><th class="text-right">Actions</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for c in customers %}
+          <tr>
+            <td class="py-3 font-medium">{{ c.full_name }}</td>
+            <td class="font-mono text-slate-500">{{ c.account_number }}</td>
+            <td class="text-right font-semibold">{{ peso(c.balance) }}</td>
+            <td>
+              {% if c.locked %}<span class="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold">Locked</span>
+              {% elif c.must_change_pin %}<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Default PIN</span>
+              {% else %}<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">Active</span>{% endif %}
+            </td>
+            <td class="text-right whitespace-nowrap">
+              <form method="post" action="{{ url_for('admin_toggle_lock', cid=c.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium">{{ 'Unlock' if c.locked else 'Lock' }}</button>
+              </form>
+              <form method="post" action="{{ url_for('admin_reset', cid=c.id) }}" class="inline" onsubmit="return confirm('Reset PIN for {{ c.full_name }}? A new default PIN will be generated.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-medium">Reset PIN</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400 py-6 text-center">No customers yet. Create the first one above 👆</p>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+    <h2 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="scroll-text" class="w-4 h-4 text-indigo-500"></i> Audit log (latest 25 events)</h2>
+    <ul class="divide-y divide-slate-100 text-sm">
+      {% for l in logs %}
+      <li class="py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5">
+        <span><b>{{ l.event.replace('_', ' ').title() }}</b>
+          {% if l.user %}<span class="text-slate-500"> · {{ l.user.full_name }}</span>{% endif %}
+          {% if l.detail %}<span class="text-slate-400"> — {{ l.detail }}</span>{% endif %}</span>
+        <span class="text-xs text-slate-400">{{ l.created_at.strftime('%b %d %I:%M %p') }} UTC · {{ l.ip_address }}</span>
+      </li>
+      {% else %}<li class="py-4 text-slate-400 text-center">No events yet.</li>{% endfor %}
+    </ul>
+  </section>
+</main>
+{% endblock %}
